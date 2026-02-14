@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WWTP Real-Time Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1e40af;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #1f2937;
+            --light: #f3f4f6;
+            --border: #e5e7eb;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 1rem;
+        }
+
+        .dashboard {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            color: var(--dark);
+            font-size: 1.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 0.625rem 1.25rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.875rem;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--light);
+            color: var(--dark);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .metric-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            transition: transform 0.2s;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+
+        .metric-label {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--dark);
+            display: flex;
+            align-items: baseline;
+            gap: 0.5rem;
+        }
+
+        .metric-unit {
+            font-size: 0.875rem;
+            color: #9ca3af;
+            font-weight: 400;
+        }
+
+        .metric-change {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            margin-top: 0.5rem;
+            display: inline-block;
+        }
+
+        .metric-change.positive {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+
+        .metric-change.negative {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .chart-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+
+        .chart-card h3 {
+            color: var(--dark);
+            margin-bottom: 1rem;
+            font-size: 1.125rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .chart-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            background: var(--light);
+            color: var(--dark);
+            font-weight: 600;
+        }
+
+        .control-panel {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            margin-bottom: 1.5rem;
+        }
+
+        .control-panel h3 {
+            color: var(--dark);
+            margin-bottom: 1rem;
+            font-size: 1.125rem;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .control-group label {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--light);
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 0 8px rgba(37, 99, 235, 0.1);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            border: none;
+        }
+
+        .slider-value {
+            min-width: 60px;
+            text-align: right;
+            font-weight: 600;
+            color: var(--dark);
+            font-size: 0.875rem;
+        }
+
+        .alerts {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+
+        .alerts h3 {
+            color: var(--dark);
+            margin-bottom: 1rem;
+            font-size: 1.125rem;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 0.875rem;
+        }
+
+        .alert-success {
+            background: #dcfce7;
+            color: #16a34a;
+            border-left: 4px solid #16a34a;
+        }
+
+        .alert-warning {
+            background: #fef3c7;
+            color: #d97706;
+            border-left: 4px solid #d97706;
+        }
+
+        .alert-danger {
+            background: #fee2e2;
+            color: #dc2626;
+            border-left: 4px solid #dc2626;
+        }
+
+        .alert-icon {
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+
+        .reactor-visual {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            margin-bottom: 1.5rem;
+        }
+
+        .reactor-visual h3 {
+            color: var(--dark);
+            margin-bottom: 1rem;
+            font-size: 1.125rem;
+        }
+
+        .reactor-diagram {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 2rem;
+            background: linear-gradient(to bottom, #f0f9ff 0%, #e0f2fe 100%);
+            border-radius: 8px;
+        }
+
+        .reactor-zone {
+            text-align: center;
+            position: relative;
+        }
+
+        .reactor-tank {
+            width: 120px;
+            height: 160px;
+            border: 3px solid var(--dark);
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            background: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .reactor-liquid {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            background: linear-gradient(to top, #3b82f6, #60a5fa);
+            transition: height 1s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 0.75rem;
+        }
+
+        .reactor-label {
+            margin-top: 0.75rem;
+            font-weight: 600;
+            color: var(--dark);
+            font-size: 0.875rem;
+        }
+
+        .reactor-arrow {
+            font-size: 2rem;
+            color: var(--primary);
+            animation: flow 2s infinite;
+        }
+
+        @keyframes flow {
+            0%, 100% { opacity: 0.3; transform: translateX(0); }
+            50% { opacity: 1; transform: translateX(5px); }
+        }
+
+        .footer {
+            background: white;
+            padding: 1rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            text-align: center;
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .reactor-diagram {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .reactor-arrow {
+                transform: rotate(90deg);
+            }
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+            color: white;
+            font-size: 1.125rem;
+        }
+
+        .loading.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Header -->
+        <div class="header">
+            <h1>
+                <span class="status-indicator"></span>
+                WWTP Real-Time Dashboard
+            </h1>
+            <div class="controls">
+                <button class="btn btn-secondary" onclick="resetSimulation()">⟳ Reset</button>
+                <button class="btn btn-primary" id="toggleBtn" onclick="toggleSimulation()">▶ Start</button>
+                <button class="btn btn-secondary" onclick="exportData()">📥 Export</button>
+            </div>
+        </div>
+
+        <!-- Key Metrics -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-label">Effluent COD</div>
+                <div class="metric-value">
+                    <span id="metric-cod">45.2</span>
+                    <span class="metric-unit">mg/L</span>
+                </div>
+                <span class="metric-change positive" id="change-cod">↓ 12.5%</span>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">NH₄-N</div>
+                <div class="metric-value">
+                    <span id="metric-nh4">0.8</span>
+                    <span class="metric-unit">mg/L</span>
+                </div>
+                <span class="metric-change positive" id="change-nh4">↓ 8.2%</span>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Total Nitrogen</div>
+                <div class="metric-value">
+                    <span id="metric-tn">8.5</span>
+                    <span class="metric-unit">mg/L</span>
+                </div>
+                <span class="metric-change positive" id="change-tn">↓ 5.1%</span>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Energy Usage</div>
+                <div class="metric-value">
+                    <span id="metric-energy">345</span>
+                    <span class="metric-unit">kWh</span>
+                </div>
+                <span class="metric-change negative" id="change-energy">↑ 3.2%</span>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">MLSS</div>
+                <div class="metric-value">
+                    <span id="metric-mlss">3200</span>
+                    <span class="metric-unit">mg/L</span>
+                </div>
+                <span class="metric-change positive" id="change-mlss">→ 0.5%</span>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">COD Removal</div>
+                <div class="metric-value">
+                    <span id="metric-removal">92.8</span>
+                    <span class="metric-unit">%</span>
+                </div>
+                <span class="metric-change positive" id="change-removal">↑ 1.2%</span>
+            </div>
+        </div>
+
+        <!-- Reactor Visualization -->
+        <div class="reactor-visual">
+            <h3>🏭 Reactor Train</h3>
+            <div class="reactor-diagram">
+                <div class="reactor-zone">
+                    <div class="reactor-tank">
+                        <div class="reactor-liquid" id="anoxic-level" style="height: 75%">
+                            DO: 0.2
+                        </div>
+                    </div>
+                    <div class="reactor-label">Anoxic Zone</div>
+                </div>
+                <div class="reactor-arrow">→</div>
+                <div class="reactor-zone">
+                    <div class="reactor-tank">
+                        <div class="reactor-liquid" id="aerobic-level" style="height: 80%; background: linear-gradient(to top, #10b981, #34d399)">
+                            DO: 2.0
+                        </div>
+                    </div>
+                    <div class="reactor-label">Aerobic Zone</div>
+                </div>
+                <div class="reactor-arrow">→</div>
+                <div class="reactor-zone">
+                    <div class="reactor-tank">
+                        <div class="reactor-liquid" id="clarifier-level" style="height: 60%; background: linear-gradient(to top, #60a5fa, #93c5fd)">
+                            TSS: 12
+                        </div>
+                    </div>
+                    <div class="reactor-label">Clarifier</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h3>
+                    Effluent Quality
+                    <span class="chart-badge">Live</span>
+                </h3>
+                <canvas id="effluentChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>
+                    Nitrogen Species
+                    <span class="chart-badge">Real-time</span>
+                </h3>
+                <canvas id="nitrogenChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>
+                    Energy & Flow
+                    <span class="chart-badge">Monitoring</span>
+                </h3>
+                <canvas id="energyChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>
+                    Biomass Concentration
+                    <span class="chart-badge">Tracking</span>
+                </h3>
+                <canvas id="biomassChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Control Panel -->
+        <div class="control-panel">
+            <h3>⚙️ Operational Parameters</h3>
+            <div class="controls-grid">
+                <div class="control-group">
+                    <label for="srt-slider">SRT (Sludge Retention Time)</label>
+                    <div class="slider-container">
+                        <input type="range" id="srt-slider" min="5" max="25" value="10" step="0.5" oninput="updateParameter('srt', this.value)">
+                        <span class="slider-value" id="srt-value">10 days</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="mlr-slider">MLR (Mixed Liquor Recycle)</label>
+                    <div class="slider-container">
+                        <input type="range" id="mlr-slider" min="1" max="5" value="3" step="0.1" oninput="updateParameter('mlr', this.value)">
+                        <span class="slider-value" id="mlr-value">3.0×</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="do-aerobic-slider">DO Aerobic Zone</label>
+                    <div class="slider-container">
+                        <input type="range" id="do-aerobic-slider" min="1" max="4" value="2" step="0.1" oninput="updateParameter('do-aerobic', this.value)">
+                        <span class="slider-value" id="do-aerobic-value">2.0 mg/L</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="flow-slider">Influent Flow Rate</label>
+                    <div class="slider-container">
+                        <input type="range" id="flow-slider" min="50" max="200" value="100" step="5" oninput="updateParameter('flow', this.value)">
+                        <span class="slider-value" id="flow-value">100 m³/h</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alerts -->
+        <div class="alerts">
+            <h3>🔔 System Alerts</h3>
+            <div id="alerts-container">
+                <div class="alert alert-success">
+                    <span class="alert-icon">✓</span>
+                    <span>All systems operating normally</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>WWTP Dashboard v2.0 | Last Updated: <span id="last-update">--:--:--</span> | Simulation Rate: 1 hour/second</p>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let isRunning = false;
+        let simulationTime = 0;
+        let dataHistory = {
+            time: [],
+            cod: [],
+            nh4: [],
+            no3: [],
+            tn: [],
+            energy: [],
+            mlss: [],
+            biomass: []
+        };
+
+        // Current parameters
+        let params = {
+            srt: 10,
+            mlr: 3.0,
+            doAerobic: 2.0,
+            flow: 100
+        };
+
+        // Initialize charts
+        const chartConfig = {
+            type: 'line',
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2,
+                animation: {
+                    duration: 500
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            color: 'rgba(0,0,0,0.05)'
+                        }
+                    },
+                    y: {
+                        grid: {
+                            color: 'rgba(0,0,0,0.05)'
+                        },
+                        beginAtZero: true
+                    }
+                }
+            }
+        };
+
+        // Effluent Chart
+        const effluentChart = new Chart(document.getElementById('effluentChart'), {
+            ...chartConfig,
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'COD',
+                    data: [],
+                    borderColor: 'rgb(59, 130, 246)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4
+                }]
+            }
+        });
+
+        // Nitrogen Chart
+        const nitrogenChart = new Chart(document.getElementById('nitrogenChart'), {
+            ...chartConfig,
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'NH₄-N',
+                        data: [],
+                        borderColor: 'rgb(16, 185, 129)',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        tension: 0.4
+                    },
+                    {
+                        label: 'NO₃-N',
+                        data: [],
+                        borderColor: 'rgb(139, 92, 246)',
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                        tension: 0.4
+                    }
+                ]
+            }
+        });
+
+        // Energy Chart
+        const energyChart = new Chart(document.getElementById('energyChart'), {
+            ...chartConfig,
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Energy (kWh)',
+                    data: [],
+                    borderColor: 'rgb(245, 158, 11)',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    tension: 0.4,
+                    yAxisID: 'y'
+                }]
+            }
+        });
+
+        // Biomass Chart
+        const biomassChart = new Chart(document.getElementById('biomassChart'), {
+            ...chartConfig,
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'MLSS (mg/L)',
+                    data: [],
+                    borderColor: 'rgb(236, 72, 153)',
+                    backgroundColor: 'rgba(236, 72, 153, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            }
+        });
+
+        // Simulation function
+        function simulate() {
+            if (!isRunning) return;
+
+            simulationTime += 1; // 1 hour
+
+            // Simple simulation model
+            const influent = {
+                cod: 400 + 50 * Math.sin(simulationTime / 12),
+                nh4: 40 + 5 * Math.sin(simulationTime / 12),
+                flow: params.flow * (1 + 0.1 * Math.sin(simulationTime / 24))
+            };
+
+            // Calculate effluent (simplified model)
+            const effluent = {
+                cod: influent.cod * Math.exp(-0.1 * params.srt) + 20,
+                nh4: influent.nh4 * Math.exp(-0.15 * params.srt) / (1 + params.mlr) + 0.5,
+                no3: 8 / (1 + params.mlr * 0.3) + 2,
+                tn: 0, // calculated below
+                energy: params.doAerobic * 100 + params.mlr * 50 + params.srt * 5,
+                mlss: 2000 + params.srt * 100 + Math.random() * 200,
+                biomass: 1500 + params.srt * 80
+            };
+
+            effluent.tn = effluent.nh4 + effluent.no3;
+
+            // Update history
+            const timeLabel = Math.floor(simulationTime / 24) + 'd ' + (simulationTime % 24) + 'h';
+            dataHistory.time.push(timeLabel);
+            dataHistory.cod.push(effluent.cod.toFixed(1));
+            dataHistory.nh4.push(effluent.nh4.toFixed(2));
+            dataHistory.no3.push(effluent.no3.toFixed(2));
+            dataHistory.tn.push(effluent.tn.toFixed(2));
+            dataHistory.energy.push(effluent.energy.toFixed(0));
+            dataHistory.mlss.push(effluent.mlss.toFixed(0));
+            dataHistory.biomass.push(effluent.biomass.toFixed(0));
+
+            // Keep last 50 points
+            if (dataHistory.time.length > 50) {
+                Object.keys(dataHistory).forEach(key => {
+                    dataHistory[key].shift();
+                });
+            }
+
+            // Update metrics
+            document.getElementById('metric-cod').textContent = effluent.cod.toFixed(1);
+            document.getElementById('metric-nh4').textContent = effluent.nh4.toFixed(2);
+            document.getElementById('metric-tn').textContent = effluent.tn.toFixed(1);
+            document.getElementById('metric-energy').textContent = Math.round(effluent.energy);
+            document.getElementById('metric-mlss').textContent = Math.round(effluent.mlss);
+            document.getElementById('metric-removal').textContent = ((1 - effluent.cod / influent.cod) * 100).toFixed(1);
+
+            // Update charts
+            updateCharts();
+
+            // Update reactor levels
+            updateReactorVisual(effluent);
+
+            // Check alerts
+            checkAlerts(effluent);
+
+            // Update timestamp
+            document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+
+            // Continue simulation
+            setTimeout(simulate, 1000);
+        }
+
+        function updateCharts() {
+            // Effluent chart
+            effluentChart.data.labels = dataHistory.time;
+            effluentChart.data.datasets[0].data = dataHistory.cod;
+            effluentChart.update('none');
+
+            // Nitrogen chart
+            nitrogenChart.data.labels = dataHistory.time;
+            nitrogenChart.data.datasets[0].data = dataHistory.nh4;
+            nitrogenChart.data.datasets[1].data = dataHistory.no3;
+            nitrogenChart.update('none');
+
+            // Energy chart
+            energyChart.data.labels = dataHistory.time;
+            energyChart.data.datasets[0].data = dataHistory.energy;
+            energyChart.update('none');
+
+            // Biomass chart
+            biomassChart.data.labels = dataHistory.time;
+            biomassChart.data.datasets[0].data = dataHistory.mlss;
+            biomassChart.update('none');
+        }
+
+        function updateReactorVisual(effluent) {
+            const anoxicLevel = 60 + Math.random() * 20;
+            const aerobicLevel = 70 + Math.random() * 20;
+            const clarifierLevel = 40 + Math.random() * 15;
+
+            document.getElementById('anoxic-level').style.height = anoxicLevel + '%';
+            document.getElementById('aerobic-level').style.height = aerobicLevel + '%';
+            document.getElementById('clarifier-level').style.height = clarifierLevel + '%';
+        }
+
+        function checkAlerts(effluent) {
+            const alertsContainer = document.getElementById('alerts-container');
+            alertsContainer.innerHTML = '';
+
+            if (effluent.cod > 50) {
+                addAlert('warning', 'COD exceeds target limit (50 mg/L)');
+            }
+            if (effluent.nh4 > 5) {
+                addAlert('danger', 'NH₄-N exceeds regulatory limit (5 mg/L)');
+            }
+            if (effluent.tn > 10) {
+                addAlert('warning', 'Total Nitrogen above target (10 mg/L)');
+            }
+            if (effluent.mlss < 2000 || effluent.mlss > 4000) {
+                addAlert('warning', 'MLSS outside optimal range (2000-4000 mg/L)');
+            }
+
+            if (alertsContainer.children.length === 0) {
+                addAlert('success', 'All systems operating normally');
+            }
+        }
+
+        function addAlert(type, message) {
+            const alertsContainer = document.getElementById('alerts-container');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            
+            const icon = type === 'success' ? '✓' : type === 'warning' ? '⚠' : '✗';
+            alert.innerHTML = `
+                <span class="alert-icon">${icon}</span>
+                <span>${message}</span>
+            `;
+            
+            alertsContainer.appendChild(alert);
+        }
+
+        function toggleSimulation() {
+            isRunning = !isRunning;
+            const btn = document.getElementById('toggleBtn');
+            
+            if (isRunning) {
+                btn.innerHTML = '⏸ Pause';
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+                simulate();
+            } else {
+                btn.innerHTML = '▶ Start';
+                btn.classList.remove('btn-secondary');
+                btn.classList.add('btn-primary');
+            }
+        }
+
+        function resetSimulation() {
+            isRunning = false;
+            simulationTime = 0;
+            
+            // Reset history
+            Object.keys(dataHistory).forEach(key => {
+                dataHistory[key] = [];
+            });
+            
+            // Reset charts
+            effluentChart.data.labels = [];
+            effluentChart.data.datasets[0].data = [];
+            effluentChart.update();
+            
+            nitrogenChart.data.labels = [];
+            nitrogenChart.data.datasets[0].data = [];
+            nitrogenChart.data.datasets[1].data = [];
+            nitrogenChart.update();
+            
+            energyChart.data.labels = [];
+            energyChart.data.datasets[0].data = [];
+            energyChart.update();
+            
+            biomassChart.data.labels = [];
+            biomassChart.data.datasets[0].data = [];
+            biomassChart.update();
+            
+            // Reset button
+            const btn = document.getElementById('toggleBtn');
+            btn.innerHTML = '▶ Start';
+            btn.classList.remove('btn-secondary');
+            btn.classList.add('btn-primary');
+            
+            // Reset metrics
+            document.getElementById('metric-cod').textContent = '--';
+            document.getElementById('metric-nh4').textContent = '--';
+            document.getElementById('metric-tn').textContent = '--';
+            document.getElementById('metric-energy').textContent = '--';
+            document.getElementById('metric-mlss').textContent = '--';
+            document.getElementById('metric-removal').textContent = '--';
+            
+            console.log('Simulation reset');
+        }
+
+        function updateParameter(param, value) {
+            const numValue = parseFloat(value);
+            
+            switch(param) {
+                case 'srt':
+                    params.srt = numValue;
+                    document.getElementById('srt-value').textContent = numValue.toFixed(1) + ' days';
+                    break;
+                case 'mlr':
+                    params.mlr = numValue;
+                    document.getElementById('mlr-value').textContent = numValue.toFixed(1) + '×';
+                    break;
+                case 'do-aerobic':
+                    params.doAerobic = numValue;
+                    document.getElementById('do-aerobic-value').textContent = numValue.toFixed(1) + ' mg/L';
+                    break;
+                case 'flow':
+                    params.flow = numValue;
+                    document.getElementById('flow-value').textContent = numValue.toFixed(0) + ' m³/h';
+                    break;
+            }
+            
+            console.log('Parameter updated:', param, '=', numValue);
+        }
+
+        function exportData() {
+            // Create CSV content
+            let csv = 'Time,COD (mg/L),NH4-N (mg/L),NO3-N (mg/L),TN (mg/L),Energy (kWh),MLSS (mg/L)\n';
+            
+            for (let i = 0; i < dataHistory.time.length; i++) {
+                csv += `${dataHistory.time[i]},${dataHistory.cod[i]},${dataHistory.nh4[i]},${dataHistory.no3[i]},${dataHistory.tn[i]},${dataHistory.energy[i]},${dataHistory.mlss[i]}\n`;
+            }
+            
+            // Create download
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `wwtp_data_${new Date().toISOString()}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            
+            console.log('Data exported');
+        }
+
+        // Initialize on load
+        window.addEventListener('load', () => {
+            console.log('Dashboard initialized');
+            document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+        });
+    </script>
+</body>
+</html>
